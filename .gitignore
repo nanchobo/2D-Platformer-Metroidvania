@@ -348,3 +348,9 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+
+# 유니티 프로젝트 Muerhark 맞춤 제거
+Muerhark/*
+!Muerhark/Assets
+Muerhark/Assets/*
+!Muerhark/Assets/Scripts
