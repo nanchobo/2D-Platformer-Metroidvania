@@ -11,8 +11,8 @@ public class PlayerMovement : MonoBehaviour
     [Header("Jump")]
     [SerializeField] private bool iCanJump;
     [SerializeField] private float jumpPower = 1f;
-    [SerializeField] private const float jumpTimeLimit = 0.33f; // 최대 점프 시간
     [SerializeField] private float jumpTimer = 0f;
+    private const float jumpTimeLimit = 0.33f; // 최대 점프 시간
 
     [Header("Components")]
     [SerializeField] private Rigidbody2D playerRigidbody;
@@ -48,7 +48,7 @@ public class PlayerMovement : MonoBehaviour
         velocity *= speed;
 
         if (iCanJump && Input.GetButton("Jump")) // Jump 버튼 입력 시 Jump() 메서드 호출
-            velocityY = JumpVelocity();
+            velocityY = JumpVelocityY();
         else
             velocityY = playerRigidbody.velocity.y;
 
@@ -60,7 +60,7 @@ public class PlayerMovement : MonoBehaviour
         playerRigidbody.velocity = velocity;
     }
 
-    private float JumpVelocity() // 플레이어 점프 Y 값
+    private float JumpVelocityY() // 플레이어 점프 Y 값
     {
         jumpTimer += Time.deltaTime; // 점프 타이머 증가
 
