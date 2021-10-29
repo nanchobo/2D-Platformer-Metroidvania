@@ -350,6 +350,7 @@ MigrationBackup/
 .ionide/
 
 # 유니티 프로젝트 Muerhark 맞춤 제거
+# Scripts 디렉토리 제외 모두 무시
 Muerhark/*
 !Muerhark/Assets
 Muerhark/Assets/*
