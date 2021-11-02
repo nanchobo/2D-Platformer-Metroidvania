@@ -10,9 +10,15 @@ public class PlayerMovement : MonoBehaviour
 
     [Header("Jump")]
     [SerializeField] private bool iCanJump;
+    [SerializeField] public bool UpInJumping; // 점프하는 동안 올라가는가?
+    [SerializeField] public bool CheckFeet;
     [SerializeField] private float jumpPower = 1f;
     [SerializeField] private float jumpTimer = 0f;
     private const float jumpTimeLimit = 0.33f; // 최대 점프 시간
+
+    [Header("Common")]
+    [SerializeField] private float gravityScale = 1f;
+    [SerializeField] public Vector3 MyFeetPosition;
 
     [Header("Components")]
     [SerializeField] private Rigidbody2D playerRigidbody;
@@ -32,12 +38,18 @@ public class PlayerMovement : MonoBehaviour
             jumpTimer = 0;
         }
 
+        if (playerRigidbody.velocity.y < 0)
+        {
+            UpInJumping = false;
+        }
+
         //Debug.Log(playerRigidbody.velocity.y);
     }
 
     private void FixedUpdate()
     {
         Movement(horizontalMove);
+        CheckMyFeet(); // 발 밑 검사
     }
 
     private void Movement(float moveVelocity) // 플레이어 이동과 점프
@@ -67,15 +79,19 @@ public class PlayerMovement : MonoBehaviour
         switch (jumpTimer)
         {
             case <= 0.11f:
-                return 1.0f * jumpPower;
+                UpInJumping = true;
+                return 1.3f * jumpPower;
 
             case <= 0.22f:
-                return 1.5f * jumpPower;
+                UpInJumping = true;
+                return 1.3f * jumpPower;
 
             case < jumpTimeLimit:
-                return 2.0f * jumpPower;
+                UpInJumping = true;
+                return 1.3f * jumpPower;
 
             default:
+                UpInJumping = true;
                 iCanJump = false;
                 jumpTimer = 0;
                 return playerRigidbody.velocity.y;
@@ -84,11 +100,47 @@ public class PlayerMovement : MonoBehaviour
         //return Mathf.Sin(1.902f * jumpTimer) * jumpPower; // 삼각함수 Sin 포물선 처럼 점프함
     }
 
+    public Vector2 JumpRay() // 보류 2021-11-02
+    {
+        Ray2D ray = new Ray2D();
+
+        ray.origin = transform.position;
+        ray.direction = Vector2.down;
+
+        return ray.GetPoint(100f);
+    }
+
+    private void CheckMyFeet() // 플레이어 발 밑에 땅이 있는지?
+    {
+        //Ray2D ray = new Ray2D(transform.position,Vector2.down);
+        RaycastHit2D hit;
+
+        
+        hit = Physics2D.Raycast(transform.position - new Vector3(0, 0.01f, 0), Vector2.down, 1.87f/*, LayerMask.NameToLayer("Ground")*/);
+
+        if (!hit.collider)
+        {
+            CheckFeet = false;
+        }
+        else
+        {
+            MyFeetPosition = hit.point;
+            CheckFeet = true;
+        }
+    }
+
+    private void OnDrawGizmos()
+    {
+        Gizmos.color = Color.green;
+        Gizmos.DrawLine(transform.position - new Vector3(0, 0.01f, 0), transform.position + (Vector3.down *1.87f));
+    }
+
     private void OnTriggerStay2D(Collider2D collision)
     {
         //collision.IsTouchingLayers(LayerMask.NameToLayer("Player"));
         if(collision.gameObject.layer == LayerMask.NameToLayer("Ground"))
         {
+            UpInJumping = false;
             iCanJump = true; // 점프 가능
             playerRigidbody.gravityScale = 1;
         }
