@@ -6,7 +6,10 @@ public class PlayerMovement : MonoBehaviour
 {
     [Header("Movement")]
     [SerializeField] private float speed;
+    [SerializeField] private bool iCanUsingLadder;
+    [SerializeField] private bool usingLadder;
     [SerializeField] private float horizontalMove;
+    [SerializeField] private float verticalMove;
 
     [Header("Jump")]
     [SerializeField] private bool iCanJump;
@@ -16,7 +19,7 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float jumpTimer = 0f;
     private const float jumpTimeLimit = 0.33f; // 최대 점프 시간
 
-    [Header("Common")]
+    [Header("etc Field Value")]
     [SerializeField] private float gravityScale = 1f;
     [SerializeField] public Vector3 MyFeetPosition;
 
@@ -26,30 +29,50 @@ public class PlayerMovement : MonoBehaviour
     private void Start()
     {
         playerRigidbody = GetComponent<Rigidbody2D>();
+        iCanUsingLadder = false;
     }
 
     private void Update()
     {
         horizontalMove = Input.GetAxisRaw("Horizontal");
+        verticalMove = Input.GetAxisRaw("Vertical");
 
         if (Input.GetButtonUp("Jump")) // 점프 버튼을 땠을 때
         {
             iCanJump = false;
             jumpTimer = 0;
         }
-
-        if (playerRigidbody.velocity.y < 0)
-        {
-            UpInJumping = false;
-        }
-
-        //Debug.Log(playerRigidbody.velocity.y);
     }
 
     private void FixedUpdate()
     {
-        Movement(horizontalMove);
+        if (!usingLadder) Movement(horizontalMove); // 사다리 사용 중이 아닐 때 좌우이동 가능
+
+        if (iCanUsingLadder) UsingLadder(verticalMove); // '사다리 오브젝트'에 트리거 시 위아래 입력으로 사다리 사용 가능
+
         CheckMyFeet(); // 발 밑 검사
+
+        // 사다리 상호작용 시, 난간 오브젝트 충돌 무시
+        if (usingLadder)
+        {
+            Physics2D.IgnoreLayerCollision(LayerMask.NameToLayer("Railing"), LayerMask.NameToLayer("Player"), true); // 두 레이어간 충돌 꺼짐
+            playerRigidbody.gravityScale = 0f; // 사다리 이용 시 중력 스케일 0
+        }
+        else if (!usingLadder)
+        {
+            // 사다리 이용 중지할 때, 난간 오브젝트 충돌 여부는 발밑 체크로 제어한다.
+            if (CheckFeet) Physics2D.IgnoreLayerCollision(LayerMask.NameToLayer("Railing"), LayerMask.NameToLayer("Player"), false); // 두 레이어간 충돌 켜짐
+
+            if (playerRigidbody.velocity.y < 0) // 추락하고 있을 경우
+            {
+                UpInJumping = false;
+                playerRigidbody.gravityScale = 2.0f;
+            }
+            else if (playerRigidbody.velocity.y >= 0) // 높이 변화가 없거나 상승 중인 경우
+            {
+                playerRigidbody.gravityScale = 1.0f;
+            }
+        }
     }
 
     private void Movement(float moveVelocity) // 플레이어 이동과 점프
@@ -64,7 +87,7 @@ public class PlayerMovement : MonoBehaviour
         else
             velocityY = playerRigidbody.velocity.y;
 
-        if (velocityY < 0f) playerRigidbody.gravityScale = 2.0f; // 추락 중력 스케일 조정
+        //if (velocityY < 0f) playerRigidbody.gravityScale = 2.0f; // 추락 중력 스케일 조정
         if (velocityY < -6.0f) velocityY = -6.0f; // 최대 추락 속도 -6.0f
 
         velocity.y = velocityY;
@@ -100,23 +123,45 @@ public class PlayerMovement : MonoBehaviour
         //return Mathf.Sin(1.902f * jumpTimer) * jumpPower; // 삼각함수 Sin 포물선 처럼 점프함
     }
 
-    public Vector2 JumpRay() // 보류 2021-11-02
+    private void UsingLadder(float moveVertical) // 사다리 이용
     {
-        Ray2D ray = new Ray2D();
+        if (moveVertical != 0)
+        {
+            usingLadder = true;
+            iCanJump = false; // 사다리 사용 중일때는 점프를 UsingLadder()에서 제어한다
+        }
+        else if (usingLadder) goto Ladder;
+        else return;
 
-        ray.origin = transform.position;
-        ray.direction = Vector2.down;
+        Ladder:
+        // 플레이어는 위, 아래로만 이동할 수 있다.
+        Vector3 velocity = new Vector3(0, moveVertical, 0);
+        //velocity *= speed; // 사다리 올라가는 속도를 높여야 할까?
 
-        return ray.GetPoint(100f);
+        // 사다리 이용 중, Jump 입력으로 사다리 이용을 중지할 수 있다.
+        if (Input.GetButton("Jump"))
+        {
+            usingLadder = false;
+            playerRigidbody.gravityScale = 1.0f;
+
+            if (horizontalMove != 0)
+            {
+                iCanJump = true;
+                return;
+            }
+            return;
+        }
+
+        playerRigidbody.velocity = velocity;
     }
 
-    private void CheckMyFeet() // 플레이어 발 밑에 땅이 있는지?
+    private void CheckMyFeet() // 플레이어 발밑에 땅이 있는지?
     {
         //Ray2D ray = new Ray2D(transform.position,Vector2.down);
         RaycastHit2D hit;
 
-        
-        hit = Physics2D.Raycast(transform.position - new Vector3(0, 0.01f, 0), Vector2.down, 1.87f/*, LayerMask.NameToLayer("Ground")*/);
+        hit = Physics2D.Raycast(transform.position - new Vector3(0, 0.01f, 0), Vector2.down, 1.87f,
+                (1 << LayerMask.NameToLayer("Ground")) + (1 << LayerMask.NameToLayer("Railing")));
 
         if (!hit.collider)
         {
@@ -138,56 +183,26 @@ public class PlayerMovement : MonoBehaviour
     private void OnTriggerStay2D(Collider2D collision)
     {
         //collision.IsTouchingLayers(LayerMask.NameToLayer("Player"));
-        if(collision.gameObject.layer == LayerMask.NameToLayer("Ground"))
+        if(collision.gameObject.layer == LayerMask.NameToLayer("Ground")) // Edge 콜라이더가 그라운드 오브젝트와 트리거 시
         {
+            Physics2D.IgnoreLayerCollision(LayerMask.NameToLayer("Railing"), LayerMask.NameToLayer("Player"), false); // 두 레이어간 충돌 켜짐
             UpInJumping = false;
             iCanJump = true; // 점프 가능
-            playerRigidbody.gravityScale = 1;
+        }
+        
+        // 플레이어가 사다리에 트리거 됐을 때, bool 변수로 사다리 상호작용 가능 여부를 체크한다.
+        if(collision.CompareTag("Ladder")) // 사다리에 들어오면 true
+        {
+            iCanUsingLadder = true;
         }
     }
 
-    void TempMove() // 예전 플레이어 움직임
+    private void OnTriggerExit2D(Collider2D collision)
     {
-        float fallSpeed = playerRigidbody.velocity.y;
-
-        Vector3 velocity = new Vector3(horizontalMove, 0, 0);
-
-        velocity *= speed;
-
-        Debug.Log("Move 함수: " + fallSpeed);
-
-        velocity.y = fallSpeed;
-        /* velocity는 게임 오브젝트의
-         * 속도를 바로 덮어씌운다.
-         * 주의해야 할 점은,
-         * 추락할 때의 속도이다.
-         * 처음 추락할 때 속도를
-         * 유지시켜 주는 것이 중요하다. */
-        playerRigidbody.velocity = velocity;
-    }
-    void TempJump() // 예전 플레이어 점프
-    {
-        jumpTimer += Time.deltaTime; // 점프 타이머 증가
-
-        if (jumpTimer >= jumpTimeLimit)
+        if(collision.CompareTag("Ladder")) // 사다리에서 벗어나면 false
         {
-            iCanJump = false; // 점프 불가
-            jumpTimer = 0;
-            //Debug.Log("점프 불가| iCanJump: " + iCanJump + "| jumpTimer: " + jumpTimer);
-            playerRigidbody.gravityScale += 2;
-            return;
+            iCanUsingLadder = false;
+            usingLadder = false;
         }
-
-
-        if (jumpTimer <= 0.11f && jumpTimer >= 0)
-        {
-            playerRigidbody.AddForce(Vector2.up * jumpPower * 0.7f, ForceMode2D.Impulse);
-        }
-        if (jumpTimer <= 0.22f && jumpTimer > 0.11f)
-        {
-            playerRigidbody.AddForce(Vector2.up * jumpPower * 1f, ForceMode2D.Impulse);
-        }
-        /* ForceMode.Impulse 는 리지드 바디 컴포턴트 요소 중에
-         * Mass(질량)의 영향을 받으며 짧은 순간에 힘을 가하는 모드이다. */
     }
 }
